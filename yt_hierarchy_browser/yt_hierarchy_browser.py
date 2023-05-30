@@ -1,13 +1,67 @@
 """Main module."""
 
+from rich.segment import Segment
+from rich.style import Style
+
 from textual.app import App, ComposeResult
 from textual.widget import Widget
 from textual.widgets import Header, Footer, Tree, Static
 from textual.reactive import reactive
+from textual.strip import Strip
+from textual.color import Color
 
 import yt
+import unyt
+import cmyt
 from yt.data_objects.index_subobjects import AMRGridPatch
 from yt.data_objects.api import Dataset
+
+import numpy as np
+
+class ImagePlotViewer(Widget):
+    min_value: reactive[float | None] = reactive(None)
+    max_value: reactive[float | None] = reactive(None)
+    color_map: reactive[str] = reactive("arbre")
+    data_values: reactive[tuple[unyt.unyt_array] | None] = reactive(None, always_update=True)
+
+    def compute_min_value(self) -> float:
+        if self.data_values is None: return 0.0
+        return self.data_values[0].min()
+
+    def compute_max_value(self) -> float:
+        if self.data_values is None: return 0.0
+        return self.data_values[0].max()
+
+    def render_line(self, y: int) -> Segment:
+        if self.data_values is None: return Strip([])
+        if y >= self.data_values[0].shape[1]: return Strip([])
+        cmap = getattr(cmyt, self.color_map)
+        dv = self.data_values[0][:, y]
+        dv = (dv - self.min_value)/(self.max_value - self.min_value)
+        segments = []
+        for val in dv:
+            color = [int(_*255) for _ in cmap(val)][:-1]
+            c = Color(*color).css
+            segments.append(Segment("\u2588", Style.parse(c)))
+        return Strip(segments)
+
+class GridSliceView(Static):
+
+    grid_values: reactive[unyt.unyt_array | None] = reactive(None)
+    coord: int = reactive(0)
+    axis: int = reactive(0)
+
+    def watch_data_values(self, data_values: unyt.unyt_array | None) -> None:
+        pass
+
+    def validate_coord(self, coord) -> int:
+        if self.grid_values is None: return coord
+        shape = self.grid_values.shape
+        coord = max(min(shape[self.axis] - 1, coord), 0)
+        return coord
+
+    def watch_coord(self, coord: int) -> None:
+        pass
 
 class GridViewer(Static):
     grid: reactive[AMRGridPatch | None] = reactive(None)
@@ -58,16 +112,21 @@ class DatasetBrowser(App):
     CSS_PATH = "yt_hierarchy_browser.css"
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield Footer()
         yield GridHierarchyBrowser()
         yield GridViewer()
+        yield ImagePlotViewer()
+        yield Header()
+        yield Footer()
 
     def on_mount(self) -> None:
         ghv = self.query_one(GridHierarchyBrowser)
         ds = yt.load_sample("IsolatedGalaxy")
+        ipv = self.query_one(ImagePlotViewer)
         assert ds is not None
         ghv.dataset = ds
+        #print(ds.index.grids[0]["density"][:,:,16])
+        ipv.data_values = (ds.index.grids[0]["density"][:,:,16].d,)
+        ipv.refresh()
 
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
         if event.node.data is None: return

@@ -10,4 +10,11 @@ GridHierarchyBrowser {
 GridViewer {
     dock: right;
     width: 50%;
+    height: 50%;
+}
+
+ImagePlotViewer {
+    dock: right;
+    width: 50%;
+    height: 50%;
 }
