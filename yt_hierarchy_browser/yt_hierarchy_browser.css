@@ -1,0 +1,13 @@
+DatasetBrowser {
+    layout: horizontal;
+}
+
+GridHierarchyBrowser {
+    dock: left;
+    width: 50%;
+}
+
+GridViewer {
+    dock: right;
+    width: 50%;
+}
